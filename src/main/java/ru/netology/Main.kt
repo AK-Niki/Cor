@@ -57,10 +57,9 @@ data class CommentWithAuthor(
 
 suspend fun fetchAuthor(client: HttpClient, authorId: Long): Author? {
     return try {
-        // Используем полный URL с localhost и портом 9999
         client.get("http://10.0.2.2:9999/api/authors/$authorId").body()
     } catch (e: Exception) {
-        println("Error fetching author with id $authorId: ${e.message}")
+        println("Error $authorId: ${e.message}")
         null
     }
 }
@@ -104,7 +103,7 @@ fun main() = runBlocking {
         }
     }
 
-    // Пример данных
+
     val posts = listOf(
         Post(1, 101, "1 Post", 1622543200, false),
         Post(2, 102, "2 Post", 1622546800, true)
@@ -116,11 +115,7 @@ fun main() = runBlocking {
     )
 
     val commentsByPost = comments.groupBy { it.postId }
-
-    // Обогащаем посты авторами и комментариями с авторами
     val postsWithAuthorsAndComments = enrichPostsWithAuthorsAndComments(client, posts, commentsByPost)
-
-    // Выводим результат
     postsWithAuthorsAndComments.forEach { post ->
         println("Post: ${post.content}, Author: ${post.author?.name}, Comments: ${post.comments?.size}")
         post.comments?.forEach { commentWithAuthor ->
