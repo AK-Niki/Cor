@@ -11,6 +11,7 @@ import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
+@Serializable
 data class Post(
     val id: Long,
     val authorId: Long,
@@ -23,6 +24,7 @@ data class Post(
     var comments: List<CommentWithAuthor>? = null
 )
 
+@Serializable
 data class Comment(
     val id: Long,
     val postId: Long,
@@ -33,12 +35,14 @@ data class Comment(
     val likes: Int = 0,
 )
 
+@Serializable
 data class Attachment(
     val url: String,
     val description: String,
     val type: AttachmentType,
 )
 
+@Serializable
 enum class AttachmentType {
     IMAGE, VIDEO
 }
@@ -50,49 +54,22 @@ data class Author(
     val avatar: String,
 )
 
+@Serializable
 data class CommentWithAuthor(
     val comment: Comment,
     var author: Author?
 )
 
-suspend fun fetchAuthor(client: HttpClient, authorId: Long): Author? {
+suspend fun fetchPosts(client: HttpClient): List<Post> {
     return try {
-        client.get("http://10.0.2.2:9999/api/authors/$authorId").body()
+        println("Запрос на получение постов")
+        val response: HttpResponse = client.get("http://localhost:9999/api/posts")
+        println("Ответ сервера: ${response.status}")
+
+        response.body<List<Post>>()
     } catch (e: Exception) {
-        println("Error $authorId: ${e.message}")
-        null
-    }
-}
-
-suspend fun fetchAuthorsForPosts(client: HttpClient, posts: List<Post>): List<Post> {
-    return coroutineScope {
-        posts.map { post ->
-            async {
-                val author = fetchAuthor(client, post.authorId)
-                post.copy(author = author)
-            }
-        }.awaitAll()
-    }
-}
-
-suspend fun fetchAuthorsForComments(client: HttpClient, comments: List<Comment>): List<CommentWithAuthor> {
-    return coroutineScope {
-        comments.map { comment ->
-            async {
-                val author = fetchAuthor(client, comment.authorId)
-                CommentWithAuthor(comment, author)
-            }
-        }.awaitAll()
-    }
-}
-
-suspend fun enrichPostsWithAuthorsAndComments(client: HttpClient, posts: List<Post>, commentsByPost: Map<Long, List<Comment>>): List<Post> {
-    val postsWithAuthors = fetchAuthorsForPosts(client, posts)
-
-    return postsWithAuthors.map { post ->
-        val comments = commentsByPost[post.id] ?: emptyList()
-        val commentsWithAuthors = fetchAuthorsForComments(client, comments)
-        post.copy(comments = commentsWithAuthors)
+        println("Ошибка получения постов: ${e.message}")
+        emptyList()
     }
 }
 
@@ -104,25 +81,16 @@ fun main() = runBlocking {
     }
 
 
-    val posts = listOf(
-        Post(1, 101, "1 Post", 1622543200, false),
-        Post(2, 102, "2 Post", 1622546800, true)
-    )
+    val posts = fetchPosts(client)
 
-    val comments = listOf(
-        Comment(1, 1, 201, "1Comment", 1622550400, false),
-        Comment(2, 1, 202, "2Comment", 1622554000, true)
-    )
-
-    val commentsByPost = comments.groupBy { it.postId }
-    val postsWithAuthorsAndComments = enrichPostsWithAuthorsAndComments(client, posts, commentsByPost)
-    postsWithAuthorsAndComments.forEach { post ->
-        println("Post: ${post.content}, Author: ${post.author?.name}, Comments: ${post.comments?.size}")
-        post.comments?.forEach { commentWithAuthor ->
-            println("  Comment: ${commentWithAuthor.comment.content}, Author: ${commentWithAuthor.author?.name}")
-        }
+    if (posts.isEmpty()) {
+        println("Список постов пуст.")
+        client.close()
+        return@runBlocking
     }
 
+    posts.forEach { post ->
+        println("Пост: ${post.content}, Автор ID: ${post.authorId}")
+    }
     client.close()
 }
-
